@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCA Tracker · sats/THB · v1.4.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0b;--bg2:#111114;--bg3:#18181d;--bg4:#1f1f26;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);
+  --text:#f0f0f2;--text2:#8b8b99;--text3:#55555f;
+  --orange:#f7931a;--orange2:#ffad47;
+  --green:#22c55e;--green-dim:rgba(34,197,94,0.12);
+  --red:#ef4444;--red-dim:rgba(239,68,68,0.12);
+  --blue:#3b82f6;
+  --radius:12px;--radius2:8px;
+  --shadow:0 1px 3px rgba(0,0,0,0.4),0 4px 16px rgba(0,0,0,0.3);
+}
+html{font-size:14px}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* HEADER */
+.header{display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(10px)}
+.header-left{display:flex;align-items:center;gap:12px}
+.logo-box{width:32px;height:32px;border-radius:8px;background:var(--orange);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0}
+.header-title{font-weight:600;font-size:14px}
+.header-sub{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:1px}
+.header-right{display:flex;align-items:center;gap:8px}
+
+/* QUICK PRICE */
+.quick-price-wrap{position:relative}
+.quick-price-display{display:flex;align-items:center;gap:6px;font-size:11px;font-family:'JetBrains Mono',monospace;cursor:pointer;padding:6px 10px;border-radius:var(--radius2);border:1px solid var(--border2);background:var(--bg3);transition:all .15s}
+.quick-price-display:hover{background:var(--bg4);border-color:var(--orange)}
+.quick-price-display .p{color:var(--orange);font-weight:700;font-size:13px}
+.quick-price-display .c{color:var(--text3)}
+.price-edit-hint{color:var(--text3);font-size:10px;margin-left:2px;opacity:.6}
+.price-status-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s}
+.price-status-dot.live{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.6);animation:pulse 2s infinite}
+.price-status-dot.cached{background:#f59e0b}
+.price-status-dot.manual{background:var(--blue)}
+.price-status-dot.error{background:var(--red)}
+.quick-price-panel{position:absolute;top:calc(100% + 8px);right:0;width:300px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:16px;box-shadow:0 16px 48px rgba(0,0,0,.6);z-index:200}
+.qp-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px}
+.qp-links{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.qp-link{font-size:10px;font-weight:600;color:var(--orange);text-decoration:none;background:rgba(247,147,26,.1);border:1px solid rgba(247,147,26,.2);border-radius:4px;padding:3px 8px;transition:all .15s}
+.qp-link:hover{background:rgba(247,147,26,.2)}
+.qp-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.qp-field label{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:4px}
+.qp-field .form-input{padding:8px 10px;font-size:12px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius2);border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;font-family:'Inter',sans-serif;white-space:nowrap}
+.btn:hover{background:var(--bg4);color:var(--text)}
+.btn-primary{background:var(--orange);color:#000;border-color:var(--orange);font-weight:600}
+.btn-primary:hover{background:var(--orange2);border-color:var(--orange2)}
+.btn-danger{background:var(--red-dim);border-color:rgba(239,68,68,0.3);color:var(--red)}
+.btn-danger:hover{background:rgba(239,68,68,0.2)}
+.btn-sm{padding:4px 10px;font-size:11px}
+
+/* LAYOUT */
+.main{padding:20px 24px;max-width:1400px;margin:0 auto}
+.section-gap{margin-bottom:20px}
+.section-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+.section-label{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.section-num{width:22px;height:22px;border-radius:6px;background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text3);font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.section-title{font-size:13px;font-weight:600;color:var(--text2);letter-spacing:.05em;text-transform:uppercase}
+.section-hint{font-size:11px;color:var(--text3);white-space:nowrap;padding-top:2px}
+
+/* TABS */
+.tabs{display:flex;gap:2px;background:var(--bg3);border-radius:var(--radius2);padding:3px}
+.tab{padding:5px 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;transition:all .15s;white-space:nowrap;border:none;background:transparent}
+.tab.active{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.tab:hover:not(.active){color:var(--text2)}
+
+/* DAY FILTER */
+.day-filter{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.day-pill{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;color:var(--text3);cursor:pointer;border:1px solid transparent;background:transparent;transition:all .15s;display:flex;align-items:center;gap:5px;font-family:'Inter',sans-serif}
+.day-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.4}
+.day-pill.active{background:var(--bg3);border-color:var(--border2);color:var(--text2)}
+.day-pill.active::before{opacity:1}
+.day-pill[data-day="ALL"]{color:var(--orange)}
+
+/* OVERVIEW */
+.overview-row{display:grid;grid-template-columns:360px 1fr;gap:14px;margin-bottom:14px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+
+/* PNL CARD */
+.pnl-card{padding:20px}
+.pnl-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.live-dot{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:var(--green);letter-spacing:.08em}
+.live-dot::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.pnl-value{font-family:'JetBrains Mono',monospace;font-size:40px;font-weight:700;line-height:1;margin-bottom:6px;color:var(--text)}
+.pnl-value.pos{color:var(--green)}
+.pnl-value.neg{color:var(--red)}
+.pnl-badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--text3);background:var(--bg3)}
+.pnl-badge.pos{background:var(--green-dim);color:var(--green)}
+.pnl-badge.neg{background:var(--red-dim);color:var(--red)}
+.pnl-meta{font-size:11px;color:var(--text3);margin-left:6px}
+.pnl-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px}
+.pnl-item label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:4px}
+.pnl-item .val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:var(--text)}
+.pnl-item .sub{font-size:11px;margin-top:2px;font-family:'JetBrains Mono',monospace;color:var(--text3)}
+.pnl-item .sub.pos{color:var(--green)}
+.pnl-item .sub.neg{color:var(--red)}
+
+/* CHART */
+.chart-card{display:flex;flex-direction:column}
+.chart-card-header{padding:14px 18px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.chart-tabs-wrap{overflow-x:auto}
+.chart-legend{display:flex;align-items:center;gap:14px;font-size:11px;color:var(--text3);flex-shrink:0}
+.legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px}
+.chart-wrap{padding:10px 14px 14px;flex:1;position:relative;min-height:240px}
+
+/* METRICS */
+.metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:10px}
+.metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:border-color .2s}
+.metric-card:hover{border-color:var(--border2)}
+.metric-label{font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
+.metric-value{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--text);line-height:1.1;margin-bottom:2px}
+.metric-value.orange{color:var(--orange)}
+.metric-value.green{color:var(--green)}
+.metric-value.red{color:var(--red)}
+.metric-sub{font-size:10px;color:var(--text3);margin-bottom:10px}
+.metric-sub.green{color:var(--green)}
+.metric-sub.red{color:var(--red)}
+.sparkline-wrap{height:32px;position:relative}
+
+/* GOALS */
+.goals-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.goal-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
+.goal-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.goal-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)}
+.goal-pct{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--text)}
+.goal-bar{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:10px}
+.goal-fill{height:100%;border-radius:2px;background:var(--orange);transition:width .6s ease}
+.goal-footer{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+
+/* TX TABLE */
+.tx-section{margin-bottom:20px}
+.table-scroll{overflow-x:auto}
+.tx-table{width:100%;border-collapse:collapse}
+.tx-table th{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.tx-table td{padding:11px 14px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tx-table tr:last-child td{border-bottom:none}
+.tx-table tr:hover td{background:rgba(255,255,255,.02)}
+.tx-date{font-family:'JetBrains Mono',monospace;color:var(--text2);font-size:11px}
+.tx-day{font-size:10px;color:var(--text3)}
+.tx-mono{font-family:'JetBrains Mono',monospace}
+.tx-sat{font-family:'JetBrains Mono',monospace;color:var(--orange)}
+.tx-dim{font-family:'JetBrains Mono',monospace;color:var(--text2);font-size:11px}
+.tx-pnl{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600}
+.tx-pnl.pos{color:var(--green)}
+.tx-pnl.neg{color:var(--red)}
+.tx-actions{display:flex;gap:6px}
+.usd-tag{display:inline-block;margin-left:5px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);color:#4ade80;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600;font-family:'JetBrains Mono',monospace;vertical-align:middle}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.4}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:opacity .2s;backdrop-filter:blur(4px)}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;padding:28px;width:420px;max-width:95vw;box-shadow:0 24px 80px rgba(0,0,0,.6);transform:translateY(12px);transition:transform .2s;max-height:90vh;overflow-y:auto}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:20px}
+.form-group{margin-bottom:14px}
+.form-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);display:block;margin-bottom:6px}
+.form-input{width:100%;padding:10px 12px;border-radius:var(--radius2);background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:13px;font-family:'JetBrains Mono',monospace;outline:none;transition:border-color .15s}
+.form-input:focus{border-color:var(--orange)}
+.form-input::placeholder{color:var(--text3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-hint{font-size:10px;color:var(--text3);margin-top:4px;font-family:'JetBrains Mono',monospace}
+.modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.calc-preview{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius2);padding:12px;margin:14px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.calc-item label{font-size:10px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:2px}
+.calc-item .cv{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--orange)}
+.del-confirm{color:var(--text3);font-size:12px;margin-bottom:16px;line-height:1.6}
+
+/* CURRENCY TOGGLE */
+.cur-toggle{display:flex;gap:4px;background:var(--bg3);border-radius:var(--radius2);padding:3px}
+.cur-btn{padding:5px 14px;border-radius:6px;font-size:12px;font-weight:600;color:var(--text3);cursor:pointer;border:none;background:transparent;font-family:'JetBrains Mono',monospace;transition:all .15s}
+.cur-btn.active{background:var(--bg4);color:var(--text);border:1px solid var(--border2)}
+.cur-btn.usd-active{color:#4ade80;border-color:rgba(74,222,128,.3)!important}
+.usd-rate-wrap{display:flex;align-items:center;gap:8px;margin-top:10px;margin-bottom:4px;padding:10px 12px;background:rgba(74,222,128,.05);border:1px solid rgba(74,222,128,.15);border-radius:var(--radius2)}
+.usd-badge{background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.2);color:#4ade80;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:600;font-family:'JetBrains Mono',monospace;white-space:nowrap;flex-shrink:0}
+
+/* TWEAKS */
+.tweaks-panel{position:fixed;top:56px;right:0;width:280px;height:calc(100vh - 56px);background:var(--bg2);border-left:1px solid var(--border);transform:translateX(100%);transition:transform .25s ease;z-index:90;overflow-y:auto;padding:20px}
+.tweaks-panel.open{transform:translateX(0)}
+.tweaks-title{font-size:13px;font-weight:700;margin-bottom:16px}
+.tweak-group{margin-bottom:20px}
+.tweak-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:8px;display:block}
+.tweak-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.tweak-name{font-size:12px;color:var(--text2)}
+.toggle{width:36px;height:20px;background:var(--bg4);border-radius:10px;position:relative;cursor:pointer;border:1px solid var(--border2);transition:background .2s;flex-shrink:0}
+.toggle.on{background:var(--orange);border-color:var(--orange)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s}
+.toggle.on::after{left:18px}
+
+/* TOAST */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius2);padding:12px 16px;font-size:12px;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.4);animation:toastIn .2s ease;display:flex;align-items:center;gap:8px;min-width:200px;max-width:320px}
+.toast.success{border-color:rgba(34,197,94,.3)}
+.toast.error{border-color:rgba(239,68,68,.3)}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* PRICE STATUS DOT */
+.price-status-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0}
+.price-status-dot.live{background:var(--green);animation:pulse 2s infinite}
+.price-status-dot.error{background:var(--red)}
+.price-status-dot.fetching{background:#f59e0b;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.refresh-opt.active{background:var(--orange);color:#000;border-color:var(--orange)}
+
+/* RESPONSIVE */
+@media(max-width:1100px){.metrics-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){
+  .overview-row{grid-template-columns:1fr}
+  .metrics-grid{grid-template-columns:repeat(2,1fr)}
+  .goals-row{grid-template-columns:1fr}
+  .main{padding:14px}
+  .header{padding:0 14px}
+  .last-update{display:none}
+  .pnl-value{font-size:30px}
+}
+@media(max-width:600px){
+  .metrics-grid{grid-template-columns:repeat(2,1fr)}
+  .header-right .btn:not(.btn-primary){display:none}
+  .form-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="logo-box">₿</div>
+    <div>
+      <div class="header-title">DCA Tracker</div>
+      <div class="header-sub">sats/THB · v1.4.0</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <!-- PRICE DISPLAY + PANEL -->
+    <div class="quick-price-wrap" id="quickPriceWrap">
+      <div class="quick-price-display" onclick="togglePriceInput()">
+        <span class="c">BTC</span>
+        <span class="p" id="headerPrice">฿--</span>
+        <span class="c" id="headerPriceUsd"></span>
+        <span class="price-status-dot" id="priceDot" title="Price status"></span>
+      </div>
+      <div class="quick-price-panel" id="quickPricePanel" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="qp-title">BTC Price</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span id="fetchStatusText" style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace"></span>
+            <button class="btn btn-sm" id="autoFetchBtn" onclick="autoFetchPrice()" style="font-size:11px;padding:4px 10px">⟳ Auto-fetch</button>
+          </div>
+        </div>
+        <!-- Auto price display -->
+        <div id="autoPriceResult" style="display:none;background:var(--bg4);border:1px solid rgba(247,147,26,.2);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:var(--orange)" id="autoPriceThb">฿--</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:2px" id="autoPriceDetail">--</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyAutoPrice()">Use This</button>
+          </div>
+        </div>
+        <div class="qp-links" style="margin-bottom:10px">
+          <a href="https://www.bitkub.com/market/THB_BTC" target="_blank" class="qp-link">Bitkub ↗</a>
+          <a href="https://www.binance.com/en/trade/BTC_USDT" target="_blank" class="qp-link">Binance ↗</a>
+          <a href="https://coinmarketcap.com/currencies/bitcoin/" target="_blank" class="qp-link">CMC ↗</a>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px;font-family:'JetBrains Mono',monospace">— or enter manually —</div>
+        <div class="qp-row">
+          <div class="qp-field">
+            <label>THB <span style="color:var(--red)">*</span></label>
+            <input type="number" id="quickPriceInput" class="form-input" placeholder="e.g. 3,500,000" onkeydown="if(event.key==='Enter')applyQuickPrice()">
+          </div>
+          <div class="qp-field">
+            <label>USD <span style="color:var(--text3)">(opt)</span></label>
+            <input type="number" id="quickPriceUsd" class="form-input" placeholder="e.g. 103,000" onkeydown="if(event.key==='Enter')applyQuickPrice()">
+          </div>
+        </div>
+        <div id="quickPriceSrc" style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px">--</div>
+        <button class="btn btn-primary" style="width:100%" onclick="applyQuickPrice()">Set Price Manually</button>
+      </div>
+    </div>
+    <button class="btn" onclick="toggleTweaks()">⚙ Tweaks</button>
+    <button class="btn btn-primary" onclick="openAddModal()">+ Add buy</button>
+  </div>
+</header>
+
+<!-- TWEAKS PANEL -->
+<div class="tweaks-panel" id="tweaksPanel">
+  <div class="tweaks-title">⚙ Settings & Tweaks</div>
+  <div class="tweak-group">
+    <span class="tweak-label">Goals</span>
+    <div class="form-group">
+      <label class="form-label">Fiat Goal (THB)</label>
+      <input class="form-input" id="goalFiat" type="number" placeholder="200000" oninput="saveTweaks()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Satoshi Goal</label>
+      <input class="form-input" id="goalSats" type="number" placeholder="2000000" oninput="saveTweaks()">
+    </div>
+  </div>
+  <div class="tweak-group">
+    <span class="tweak-label">Manual BTC Price (THB)</span>
+    <div class="form-group">
+      <input class="form-input" id="manualPrice" type="number" placeholder="Auto from API">
+      <div class="form-hint">Leave empty to auto-fetch</div>
+    </div>
+    <button class="btn" style="width:100%;margin-bottom:8px" onclick="applyManualPrice()">Apply Price</button>
+    <div class="form-label" style="margin-bottom:6px">Auto-refresh interval</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-sm refresh-opt active" data-min="5"  onclick="pickRefresh(5,this)">5m</button>
+      <button class="btn btn-sm refresh-opt"        data-min="15" onclick="pickRefresh(15,this)">15m</button>
+      <button class="btn btn-sm refresh-opt"        data-min="30" onclick="pickRefresh(30,this)">30m</button>
+      <button class="btn btn-sm refresh-opt"        data-min="60" onclick="pickRefresh(60,this)">1h</button>
+      <button class="btn btn-sm refresh-opt"        data-min="0"  onclick="pickRefresh(0,this)">Off</button>
+    </div>
+    <div id="refreshIntervalLabel" style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-top:6px">Auto-refresh: 5m</div>
+  </div>
+  <div class="tweak-group">
+    <span class="tweak-label">Display</span>
+    <div class="tweak-row">
+      <span class="tweak-name">Show day of week</span>
+      <div class="toggle on" id="toggleDay" onclick="this.classList.toggle('on');renderTxTable()"></div>
+    </div>
+    <div class="tweak-row">
+      <span class="tweak-name">Show % P&L per tx</span>
+      <div class="toggle on" id="togglePct" onclick="this.classList.toggle('on');renderTxTable()"></div>
+    </div>
+    <div class="tweak-row">
+      <span class="tweak-name">Chart follows day filter</span>
+      <div class="toggle" id="toggleChartFilter" onclick="this.classList.toggle('on');renderMainChart()"></div>
+    </div>
+  </div>
+  <div class="tweak-group">
+    <span class="tweak-label">Data</span>
+    <button class="btn btn-danger" style="width:100%;margin-bottom:8px" onclick="clearAllData()">🗑 Clear All Data</button>
+    <button class="btn" style="width:100%;margin-bottom:8px" onclick="exportData()">↓ Export JSON</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="btn" style="width:100%" onclick="document.getElementById('importFile').click()">↑ Import JSON</button>
+  </div>
+</div>
+
+<main class="main">
+
+  <!-- SECTION 01 -->
+  <div class="section-gap">
+    <div class="section-header">
+      <div class="section-label">
+        <div class="section-num">01</div>
+        <span class="section-title">Overview</span>
+        <div class="day-filter">
+          <button class="day-pill active" data-day="ALL" onclick="setDayFilter('ALL',this)">ALL</button>
+          <button class="day-pill" data-day="0" onclick="setDayFilter('0',this)">Sun</button>
+          <button class="day-pill" data-day="1" onclick="setDayFilter('1',this)">Mon</button>
+          <button class="day-pill" data-day="2" onclick="setDayFilter('2',this)">Tue</button>
+          <button class="day-pill" data-day="3" onclick="setDayFilter('3',this)">Wed</button>
+          <button class="day-pill" data-day="4" onclick="setDayFilter('4',this)">Thu</button>
+          <button class="day-pill" data-day="5" onclick="setDayFilter('5',this)">Fri</button>
+          <button class="day-pill" data-day="6" onclick="setDayFilter('6',this)">Sat</button>
+        </div>
+      </div>
+      <div class="section-hint">PNL · chart · hover for daily values</div>
+    </div>
+    <div class="overview-row">
+      <div class="card pnl-card">
+        <div class="pnl-label">
+          <span>UNREALIZED P&amp;L</span>
+          <span class="live-dot">LIVE</span>
+        </div>
+        <div class="pnl-value" id="pnlValue">฿--</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;margin-top:6px">
+          <span class="pnl-badge" id="pnlBadge">--%</span>
+          <span class="pnl-meta" id="pnlMeta">all-time · 0 days</span>
+        </div>
+        <div class="pnl-grid">
+          <div class="pnl-item">
+            <label>MARKET VALUE</label>
+            <div class="val" id="marketValue">฿--</div>
+            <div class="sub" id="mv24h">24h --</div>
+          </div>
+          <div class="pnl-item">
+            <label>INVESTED</label>
+            <div class="val" id="totalInvested">฿0</div>
+            <div class="sub" id="avgDailySpend">฿0/day</div>
+          </div>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-card-header">
+          <div class="chart-tabs-wrap">
+            <div class="tabs" id="chartTabs">
+              <button class="tab active" onclick="switchChart('portfolio',this)">Portfolio vs Invested</button>
+              <button class="tab" onclick="switchChart('pnl',this)">Unrealized P&L</button>
+              <button class="tab" onclick="switchChart('cost',this)">Cost vs Market</button>
+              <button class="tab" onclick="switchChart('sats',this)">Sat Accumulation</button>
+              <button class="tab" onclick="switchChart('entry',this)">Entry Points</button>
+            </div>
+          </div>
+          <div id="chartLegend" class="chart-legend">
+            <span><span class="legend-dot" style="background:var(--orange)"></span>Portfolio Value</span>
+            <span><span class="legend-dot" style="background:var(--text3)"></span>Invested</span>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 02 -->
+  <div class="section-gap">
+    <div class="section-header">
+      <div class="section-label">
+        <div class="section-num">02</div>
+        <span class="section-title">Metrics &amp; Goals</span>
+      </div>
+      <div class="section-hint">core numbers · progress</div>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Spend Fiat</div><div class="metric-value" id="mSpend">฿0</div><div class="metric-sub" id="mSpendSub">0 days · ฿0/day</div><div class="sparkline-wrap"><canvas id="spkSpend"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Total Satoshi</div><div class="metric-value orange" id="mSats">0 sat</div><div class="metric-sub" id="mSatsBtc">0.00000000 BTC</div><div class="sparkline-wrap"><canvas id="spkSats"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Current BTC Price</div><div class="metric-value orange" id="mPrice">฿--</div><div class="metric-sub" id="mPriceSrc">fetching...</div><div class="sparkline-wrap"><canvas id="spkPrice"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Market Value</div><div class="metric-value" id="mMarket">฿--</div><div class="metric-sub">Your portfolio in THB</div><div class="sparkline-wrap"><canvas id="spkMarket"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Average Cost</div><div class="metric-value" id="mAvgCost">-- sat/฿</div><div class="metric-sub">Across all buys</div><div class="sparkline-wrap"><canvas id="spkAvg"></canvas></div></div>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">Today SAT/THB</div><div class="metric-value green" id="mTodaySat">-- sat/฿</div><div class="metric-sub" id="mTodaySatSub">vs avg --</div><div class="sparkline-wrap"><canvas id="spkToday"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Max Drawdown</div><div class="metric-value red" id="mDrawdown">--.-- %</div><div class="metric-sub">Portfolio peak-to-trough</div><div class="sparkline-wrap"><canvas id="spkDraw"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">% Profit / Loss</div><div class="metric-value" id="mPct">--.-- %</div><div class="metric-sub" id="mPctSub">฿0 unrealized</div><div class="sparkline-wrap"><canvas id="spkPct"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Worst Single Buy</div><div class="metric-value red" id="mWorst">--.-- %</div><div class="metric-sub" id="mWorstSub">--</div><div class="sparkline-wrap"><canvas id="spkWorst"></canvas></div></div>
+      <div class="metric-card"><div class="metric-label">Best Single Buy</div><div class="metric-value green" id="mBest">--.-- %</div><div class="metric-sub" id="mBestSub">--</div><div class="sparkline-wrap"><canvas id="spkBest"></canvas></div></div>
+    </div>
+    <div class="goals-row">
+      <div class="goal-card">
+        <div class="goal-top"><span class="goal-label">GOAL · FIAT</span><span class="goal-pct" id="goalFiatPct">0.00%</span></div>
+        <div class="goal-bar"><div class="goal-fill" id="goalFiatBar" style="width:0%"></div></div>
+        <div class="goal-footer"><span id="goalFiatCurrent">฿0</span><span id="goalFiatTarget">Goal · ฿200,000</span></div>
+      </div>
+      <div class="goal-card">
+        <div class="goal-top"><span class="goal-label">GOAL · TOTAL SATOSHI</span><span class="goal-pct" id="goalSatsPct">0.00%</span></div>
+        <div class="goal-bar"><div class="goal-fill" id="goalSatsBar" style="width:0%"></div></div>
+        <div class="goal-footer"><span id="goalSatsCurrent">0 sat</span><span id="goalSatsTarget">Goal · 2,000,000 sat</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 03 -->
+  <div class="tx-section">
+    <div class="section-header">
+      <div class="section-label">
+        <div class="section-num">03</div>
+        <span class="section-title">Transactions</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="section-hint" id="txCount">0 buys</span>
+        <button class="btn btn-sm" onclick="openAddModal()">+ Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-scroll">
+        <table class="tx-table">
+          <thead><tr>
+            <th>Date</th><th>Spent</th><th>Satoshis</th>
+            <th>sat/฿</th><th>Entry Price</th>
+            <th>P&amp;L (THB)</th><th>P&amp;L %</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="txBody"></tbody>
+        </table>
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">₿</div>
+          <div style="font-size:13px;color:var(--text3)">No transactions yet. Add your first buy.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ADD/EDIT MODAL -->
+<div class="modal-overlay" id="txModal">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Add Buy Transaction</div>
+    <div class="modal-sub" id="modalSub">Record a new BTC purchase</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="cur-toggle">
+        <button class="cur-btn active" id="curTHB" onclick="setCurrency('THB')">THB ฿</button>
+        <button class="cur-btn" id="curUSD" onclick="setCurrency('USD')">USD $</button>
+      </div>
+    </div>
+    <div class="usd-rate-wrap" id="usdRateWrap" style="display:none">
+      <span class="usd-badge" id="usdRateBadge">$1 = ฿--</span>
+      <input class="form-input" id="usdRate" type="number" placeholder="e.g. 34.50" style="padding:6px 10px;font-size:12px" oninput="calcPreview()">
+      <span style="font-size:10px;color:var(--text3);white-space:nowrap">THB/USD</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input class="form-input" id="txDate" type="date" oninput="calcPreview()">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" id="amountLabel">Amount (THB)</label>
+        <input class="form-input" id="txAmt" type="number" placeholder="1000" oninput="calcPreview()">
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="btcPriceLabel">BTC Price (THB)</label>
+        <input class="form-input" id="txBtcPrice" type="number" placeholder="Auto" oninput="calcPreview()">
+        <div class="form-hint" id="priceHint">Leave empty to use live price</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Satoshis <span style="color:var(--text3);font-weight:400">(optional override)</span></label>
+      <input class="form-input" id="txSats" type="number" placeholder="Auto-calculated" oninput="calcPreview()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Note <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <input class="form-input" id="txNote" type="text" placeholder="Weekly DCA, Bitkub...">
+    </div>
+    <div class="calc-preview">
+      <div class="calc-item"><label>Satoshis</label><div class="cv" id="prevSats">—</div></div>
+      <div class="calc-item"><label>sat/฿</label><div class="cv" id="prevRate">—</div></div>
+      <div class="calc-item"><label>BTC Amount</label><div class="cv" id="prevBtc">—</div></div>
+      <div class="calc-item"><label id="prevEntryLabel">Entry Price</label><div class="cv" id="prevEntry">—</div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modalSaveBtn" onclick="saveTx()">Save Transaction</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="delModal">
+  <div class="modal">
+    <div class="modal-title">Delete Transaction?</div>
+    <div class="del-confirm" id="delConfirmText">This action cannot be undone.</div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeDelModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- CLEAR ALL MODAL -->
+<div class="modal-overlay" id="clearModal">
+  <div class="modal">
+    <div class="modal-title" style="color:var(--red)">🗑 Clear All Data?</div>
+    <div class="del-confirm">Will permanently delete <strong id="clearCount" style="color:var(--text)">all transactions</strong> and price history.<br><span style="color:var(--red)">Cannot be undone.</span></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeClearModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmClearAll()">Yes, Delete Everything</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  transactions: [],
+  btcPrice: null, btcPriceUsd: null, btc24h: null,
+  priceHistory: [],
+  settings: { goalFiat:200000, goalSats:2000000, manualPrice:null, refreshInterval:5 }
+};
+let editId=null, deleteId=null, currentChart='portfolio', dayFilter='ALL';
+let mainChart=null, sparkCharts={}, modalCurrency='THB', modalMode='add';
+let usdThbRate=null, priceSource='', isFetching=false, priceRefreshInterval=null;
+let autoFetchedPrice=null;
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+// ============================================================
+// STORAGE
+// ============================================================
+function save(){try{localStorage.setItem('dca_v4',JSON.stringify(state));}catch(e){}}
+function load(){
+  try{
+    const raw=localStorage.getItem('dca_v4')||localStorage.getItem('dca_tracker_v3')||localStorage.getItem('dca_tracker_v2');
+    if(raw){const p=JSON.parse(raw);state={...state,...p};}
+  }catch(e){}
+  if(!state.settings) state.settings={goalFiat:200000,goalSats:2000000,manualPrice:null,refreshInterval:5};
+  if(!state.priceHistory) state.priceHistory=[];
+  if(!state.transactions)  state.transactions=[];
+}
+
+// ============================================================
+// PRICE — Claude API + web_search proxy
+// ============================================================
+function fetchPrice(){
+  // 1. Show cached immediately
+  if(state.settings.manualPrice){
+    state.btcPrice=state.settings.manualPrice; priceSource='Manual';
+  } else if(state.priceHistory.length>0){
+    state.btcPrice=state.priceHistory[state.priceHistory.length-1].price; priceSource='Cached';
+  }
+  refreshPriceUI(); renderAll();
+  // 2. Fetch live in background (skip if manual locked)
+  if(!state.settings.manualPrice) autoFetchPrice(true);
+}
+
+async function autoFetchPrice(silent){
+  if(isFetching) return;
+  isFetching=true;
+  setFetchStatus('fetching','⟳ Fetching...');
+  try{
+    const result=await fetchPriceFromClaude();
+    if(!result||result.thb<=0) throw new Error('No valid price returned');
+    autoFetchedPrice={...result,ts:Date.now()};
+    setFetchStatus('ok','✓ Live · '+new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}));
+    showAutoResult(result);
+    if(silent) applyPriceData(result.thb,result.usd,'Live',result.change24h);
+  }catch(e){
+    setFetchStatus('error','✗ '+e.message.slice(0,40));
+    if(!silent) toast('Auto-fetch failed: '+e.message.slice(0,60),'error');
+  }
+  isFetching=false;
+}
+
+async function fetchPriceFromClaude(){
+  const body=(messages)=>JSON.stringify({
+    model:'claude-haiku-4-5-20251001', max_tokens:1024,
+    tools:[{type:'web_search_20250305',name:'web_search'}],
+    messages
+  });
+  const userMsg={role:'user',content:'Search for the current Bitcoin BTC price right now in USD and THB. Reply with ONLY this JSON (real numbers, no markdown): {"usd":NUMBER,"thb":NUMBER,"change24h":NUMBER}'};
+
+  const r1=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:body([userMsg])});
+  if(!r1.ok) throw new Error('API '+r1.status+': '+(await r1.text()).slice(0,80));
+  const d1=await r1.json();
+
+  if(d1.stop_reason==='tool_use'){
+    const toolBlocks=d1.content.filter(b=>b.type==='tool_use');
+    const toolResults=toolBlocks.map(b=>({type:'tool_result',tool_use_id:b.id,content:'Search completed'}));
+    const r2=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:body([userMsg,{role:'assistant',content:d1.content},{role:'user',content:toolResults}])});
+    if(!r2.ok) throw new Error('API step2 '+r2.status);
+    const d2=await r2.json();
+    return parsePriceFromContent(d2.content);
+  }
+  return parsePriceFromContent(d1.content);
+}
+
+function parsePriceFromContent(blocks){
+  const text=(blocks||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ');
+  // Try full JSON parse
+  const jsonMatch=text.match(/\{[^{}]*"usd"[^{}]*"thb"[^{}]*\}|\{[^{}]*"thb"[^{}]*"usd"[^{}]*\}/);
+  if(jsonMatch){
+    try{
+      const obj=JSON.parse(jsonMatch[0].replace(/,\s*}/g,'}'));
+      const usd=parseFloat(obj.usd), thb=parseFloat(obj.thb);
+      if(usd>1000&&usd<1000000&&thb>10000) return{usd,thb,change24h:obj.change24h??null};
+    }catch(e){}
+  }
+  // Regex fallback
+  const usdM=text.match(/"usd"\s*:\s*([\d,]+(?:\.\d+)?)/i);
+  const thbM=text.match(/"thb"\s*:\s*([\d,]+(?:\.\d+)?)/i);
+  const chgM=text.match(/"change24h"\s*:\s*(-?[\d.]+)/i);
+  const usd=usdM?parseFloat(usdM[1].replace(/,/g,'')):null;
+  const thb=thbM?parseFloat(thbM[1].replace(/,/g,'')):null;
+  if(!usd||usd<1000||usd>1000000) throw new Error('Could not parse USD price from: '+text.slice(0,100));
+  const finalThb=thb&&thb>10000?thb:usd*(usdThbRate||33.5);
+  return{usd,thb:finalThb,change24h:chgM?parseFloat(chgM[1]):null};
+}
+
+function setFetchStatus(type,text){
+  const dot=document.getElementById('priceDot');
+  const txt=document.getElementById('fetchStatusText');
+  const btn=document.getElementById('autoFetchBtn');
+  if(txt) txt.textContent=text;
+  if(dot){
+    dot.className='price-status-dot';
+    if(type==='fetching'){dot.classList.add('fetching'); if(btn) btn.disabled=true;}
+    else if(type==='ok'){dot.classList.add('live'); if(btn) btn.disabled=false;}
+    else {dot.classList.add('error'); if(btn) btn.disabled=false;}
+  }
+}
+
+function showAutoResult(r){
+  const el=document.getElementById('autoPriceResult');
+  if(!el) return;
+  el.style.display='block';
+  const setT=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  setT('autoThb','฿'+fmt(r.thb));
+  setT('autoUsd','$'+fmt(r.usd));
+  setT('autoChange',r.change24h!=null?(r.change24h>=0?'+':'')+fmtD(r.change24h,2)+'% 24h':'');
+  const changeEl=document.getElementById('autoChange');
+  if(changeEl&&r.change24h!=null) changeEl.style.color=r.change24h>=0?'var(--green)':'var(--red)';
+}
+
+function applyAutoPrice(){
+  if(!autoFetchedPrice||!autoFetchedPrice.thb){toast('No fetched price to apply','error');return;}
+  applyPriceData(autoFetchedPrice.thb,autoFetchedPrice.usd,'Live',autoFetchedPrice.change24h);
+  document.getElementById('quickPricePanel').style.display='none';
+  toast('Live price applied ✓','success');
+}
+
+function applyPriceData(thb,usd,src,change24h){
+  if(!thb||thb<=0) return;
+  state.btcPrice=thb; state.btcPriceUsd=usd||null;
+  if(change24h!=null) state.btc24h=change24h;
+  priceSource=src||'Manual';
+  if(thb&&usd) usdThbRate=thb/usd;
+  const today=new Date().toISOString().split('T')[0];
+  const idx=state.priceHistory.findIndex(p=>p.date===today);
+  if(idx>=0) state.priceHistory[idx].price=thb;
+  else state.priceHistory.push({date:today,price:thb});
+  if(state.priceHistory.length>90) state.priceHistory.shift();
+  if(src!=='Live') state.settings.manualPrice=thb;
+  else state.settings.manualPrice=null;
+  save(); refreshPriceUI(); renderAll();
+}
+
+function refreshPriceUI(){
+  const now=new Date();
+  const ts=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  const hp=document.getElementById('headerPrice');
+  const hu=document.getElementById('headerPriceUsd');
+  const qi=document.getElementById('quickPriceInput');
+  const qs=document.getElementById('quickPriceSrc');
+  if(hp) hp.textContent=state.btcPrice?'฿'+fmt(state.btcPrice):'฿--';
+  if(hu) hu.textContent=state.btcPriceUsd?'$'+fmt(state.btcPriceUsd):'';
+  if(qi) qi.value=state.btcPrice?Math.round(state.btcPrice):'';
+  if(qs) qs.textContent=state.btcPrice?(priceSource+' · '+ts):'No price — fetch or enter manually';
+  if(usdThbRate){
+    const rb=document.getElementById('usdRateBadge');
+    if(rb) rb.textContent='$1 = ฿'+fmtD(usdThbRate,2);
+    const ri=document.getElementById('usdRate');
+    if(ri&&!ri.value) ri.placeholder=fmtD(usdThbRate,2);
+  }
+  const mp=document.getElementById('manualPrice');
+  if(mp) mp.value=state.btcPrice?Math.round(state.btcPrice):'';
+  // update price hint in modal
+  const ph=document.getElementById('priceHint');
+  if(ph){
+    if(modalCurrency==='USD') ph.textContent=state.btcPriceUsd?'Current: $'+fmt(state.btcPriceUsd,0):'Enter BTC price in USD';
+    else ph.textContent=state.btcPrice?'Current: ฿'+fmt(state.btcPrice,0):'Leave empty to use live price';
+  }
+}
+
+function applyQuickPrice(){
+  const thb=parseFloat(document.getElementById('quickPriceInput').value);
+  const usd=parseFloat(document.getElementById('quickPriceUsd').value);
+  if(!thb||thb<=0){toast('Enter BTC price in THB','error');return;}
+  applyPriceData(thb,usd||null,'Manual',null);
+  toast('Price set · ฿'+fmt(thb)+' ✓','success');
+  document.getElementById('quickPricePanel').style.display='none';
+}
+
+function applyManualPrice(){
+  const v=parseFloat(document.getElementById('manualPrice').value);
+  if(v>0){applyPriceData(v,null,'Manual',null);toast('Price set · ฿'+fmt(v),'success');}
+  else{state.settings.manualPrice=null;state.btcPrice=null;priceSource='';save();refreshPriceUI();renderAll();toast('Price cleared','success');}
+}
+
+function pickRefresh(minutes,el){
+  document.querySelectorAll('.refresh-opt').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  state.settings.refreshInterval=minutes; save();
+  startAutoRefresh(minutes);
+}
+
+function startAutoRefresh(minutes){
+  if(priceRefreshInterval) clearInterval(priceRefreshInterval);
+  priceRefreshInterval=null;
+  const lbl=document.getElementById('refreshIntervalLabel');
+  if(!minutes||minutes<=0){if(lbl)lbl.textContent='Auto-refresh: Off';return;}
+  if(lbl) lbl.textContent='Auto-refresh: '+(minutes>=60?'1h':minutes+'m');
+  priceRefreshInterval=setInterval(()=>{if(!state.settings.manualPrice)autoFetchPrice(true);},minutes*60*1000);
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function fmt(n,d=0){if(n==null||isNaN(n))return'0';return Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
+function fmtD(n,d=2){if(n==null||isNaN(n))return(0).toFixed(d);return Number(n).toFixed(d);}
+function satToBtc(sat){return sat/1e8;}
+function thbToSat(thb,price){return Math.round((thb/price)*1e8);}
+function satPerThb(price){return price>0?1e8/price:0;}
+
+// ============================================================
+// CALCULATIONS
+// ============================================================
+function calcPortfolio(txs){
+  if(!txs||!txs.length) return{totalThb:0,totalSats:0,avgCostBtc:0,marketValue:null,pnl:null,pnlPct:null};
+  const totalThb=txs.reduce((a,t)=>a+(t.thb||0),0);
+  const totalSats=txs.reduce((a,t)=>a+(t.sats||0),0);
+  const avgCostBtc=totalSats>0?totalThb/satToBtc(totalSats):0;
+  const marketValue=state.btcPrice!=null?satToBtc(totalSats)*state.btcPrice:null;
+  const pnl=marketValue!=null?marketValue-totalThb:null;
+  const pnlPct=(pnl!=null&&totalThb>0)?(pnl/totalThb)*100:null;
+  return{totalThb,totalSats,avgCostBtc,marketValue,pnl,pnlPct};
+}
+
+function txPnl(tx){
+  if(state.btcPrice==null) return{pnl:null,pct:null};
+  const mv=satToBtc(tx.sats)*state.btcPrice;
+  const pnl=mv-tx.thb;
+  const pct=tx.thb>0?(pnl/tx.thb)*100:0;
+  return{pnl,pct};
+}
+
+function getDays(){
+  if(!state.transactions.length) return 0;
+  const sorted=[...state.transactions].sort((a,b)=>a.date.localeCompare(b.date));
+  return Math.round((Date.now()-new Date(sorted[0].date+'T00:00:00').getTime())/86400000);
+}
+
+function filteredTxs(){
+  if(dayFilter==='ALL') return state.transactions;
+  return state.transactions.filter(tx=>new Date(tx.date+'T00:00:00').getDay()===parseInt(dayFilter));
+}
+
+function calcMaxDrawdown(){
+  const sorted=[...state.transactions].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!sorted.length||state.btcPrice==null) return null;
+  const map={};
+  sorted.forEach(tx=>{if(!map[tx.date])map[tx.date]={thb:0,sats:0};map[tx.date].thb+=tx.thb;map[tx.date].sats+=tx.sats;});
+  let runSats=0,peak=0,maxDD=0;
+  const first=new Date(sorted[0].date+'T00:00:00'),last=new Date();
+  for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)){
+    const key=d.toISOString().split('T')[0];
+    if(map[key]) runSats+=map[key].sats;
+    const mv=satToBtc(runSats)*state.btcPrice;
+    if(mv>peak) peak=mv;
+    if(peak>0){const dd=(mv-peak)/peak*100;if(dd<maxDD)maxDD=dd;}
+  }
+  return maxDD;
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll(){
+  const fTxs=filteredTxs(),p=calcPortfolio(fTxs),allP=calcPortfolio(state.transactions),days=getDays();
+  const hasTxs=state.transactions.length>0,hasPrice=state.btcPrice!=null;
+
+  // PNL card
+  const pnlEl=document.getElementById('pnlValue');
+  if(p.pnl!=null){pnlEl.textContent=(p.pnl>=0?'+':'-')+'฿'+fmt(Math.abs(p.pnl),2);pnlEl.className='pnl-value '+(p.pnl>=0?'pos':'neg');}
+  else{pnlEl.textContent=hasTxs?'฿--':'฿0.00';pnlEl.className='pnl-value';}
+
+  const badge=document.getElementById('pnlBadge');
+  if(p.pnlPct!=null){badge.textContent=(p.pnlPct>=0?'+':'')+fmtD(p.pnlPct,2)+'%';badge.className='pnl-badge '+(p.pnlPct>=0?'pos':'neg');}
+  else{badge.textContent='--%';badge.className='pnl-badge';}
+
+  document.getElementById('pnlMeta').textContent='all-time · '+days+' days';
+  document.getElementById('marketValue').textContent=p.marketValue!=null?'฿'+fmt(p.marketValue,0):(hasTxs?'฿--':'฿0');
+  document.getElementById('totalInvested').textContent='฿'+fmt(p.totalThb,0);
+
+  const mv24hEl=document.getElementById('mv24h');
+  if(hasPrice&&allP.totalSats>0&&state.btc24h!=null){
+    const ch=satToBtc(allP.totalSats)*state.btcPrice*(state.btc24h/100);
+    mv24hEl.textContent='24h '+(ch>=0?'+':'')+'฿'+fmt(Math.abs(ch),2)+' ('+fmtD(state.btc24h,2)+'%)';
+    mv24hEl.className='sub '+(ch>=0?'pos':'neg');
+  }else{mv24hEl.textContent='24h --';mv24hEl.className='sub';}
+
+  const dailySpend=days>0?allP.totalThb/days:0;
+  document.getElementById('avgDailySpend').textContent='฿'+fmt(dailySpend,0)+'/day';
+
+  // Metric cards
+  document.getElementById('mSpend').textContent='฿'+fmt(allP.totalThb,0);
+  document.getElementById('mSpendSub').textContent=days+' days · ฿'+fmt(dailySpend,0)+'/day';
+  document.getElementById('mSats').textContent=fmt(allP.totalSats,0)+' sat';
+  document.getElementById('mSatsBtc').textContent=satToBtc(allP.totalSats).toFixed(8)+' BTC';
+  document.getElementById('mPrice').textContent=hasPrice?'฿'+fmt(state.btcPrice,0):'฿--';
+  document.getElementById('mPriceSrc').textContent=state.settings.manualPrice?'Manual · override':(priceSource?priceSource+' · live':'fetching...');
+
+  const mMkt=document.getElementById('mMarket');
+  if(allP.marketValue!=null){mMkt.textContent='฿'+fmt(allP.marketValue,0);mMkt.className='metric-value '+(allP.pnl>=0?'green':'red');}
+  else{mMkt.textContent=hasTxs?'฿--':'฿0';mMkt.className='metric-value';}
+
+  const avgSatPerThb=allP.totalThb>0?allP.totalSats/allP.totalThb:0;
+  document.getElementById('mAvgCost').textContent=avgSatPerThb>0?fmtD(avgSatPerThb,2)+' sat/฿':'-- sat/฿';
+
+  const todaySat=hasPrice?satPerThb(state.btcPrice):0;
+  document.getElementById('mTodaySat').textContent=todaySat>0?fmtD(todaySat,2)+' sat/฿':'-- sat/฿';
+  const tSub=document.getElementById('mTodaySatSub');
+  if(avgSatPerThb>0&&todaySat>0){const vs=todaySat-avgSatPerThb;tSub.textContent=(vs>=0?'+':'')+fmtD(vs,2)+' vs avg ('+(vs>=0?'good buy':'expensive')+')';tSub.className='metric-sub '+(vs>=0?'green':'red');}
+  else{tSub.textContent='vs avg --';tSub.className='metric-sub';}
+
+  const pctEl=document.getElementById('mPct');
+  if(allP.pnlPct!=null){pctEl.textContent=(allP.pnlPct>=0?'+':'')+fmtD(allP.pnlPct,2)+'%';pctEl.className='metric-value '+(allP.pnlPct>=0?'green':'red');document.getElementById('mPctSub').textContent='฿'+fmt(Math.abs(allP.pnl),2)+' unrealized';}
+  else{pctEl.textContent='--.-- %';pctEl.className='metric-value';document.getElementById('mPctSub').textContent=hasTxs?'฿-- unrealized':'฿0 unrealized';}
+
+  const dd=calcMaxDrawdown();
+  document.getElementById('mDrawdown').textContent=dd!=null?fmtD(dd,2)+'%':'--.-- %';
+
+  let best=null,worst=null;
+  state.transactions.forEach(tx=>{const{pct}=txPnl(tx);if(pct==null)return;if(best==null||pct>best.pct)best={...tx,pct};if(worst==null||pct<worst.pct)worst={...tx,pct};});
+  if(best){document.getElementById('mBest').textContent=(best.pct>=0?'+':'')+fmtD(best.pct,2)+'%';document.getElementById('mBestSub').textContent=best.date+' · ฿'+fmt(best.thb,0);}
+  if(worst){document.getElementById('mWorst').textContent=fmtD(worst.pct,2)+'%';document.getElementById('mWorstSub').textContent=worst.date+' · ฿'+fmt(worst.thb,0);}
+
+  const gFiat=state.settings.goalFiat||200000,gSats=state.settings.goalSats||2000000;
+  const gFP=Math.min(100,(allP.totalThb/gFiat)*100),gSP=Math.min(100,(allP.totalSats/gSats)*100);
+  document.getElementById('goalFiatPct').textContent=fmtD(gFP,2)+'%';
+  document.getElementById('goalFiatBar').style.width=gFP+'%';
+  document.getElementById('goalFiatCurrent').textContent='฿'+fmt(allP.totalThb,0);
+  document.getElementById('goalFiatTarget').textContent='Goal · ฿'+fmt(gFiat,0);
+  document.getElementById('goalSatsPct').textContent=fmtD(gSP,2)+'%';
+  document.getElementById('goalSatsBar').style.width=gSP+'%';
+  document.getElementById('goalSatsCurrent').textContent=fmt(allP.totalSats,0)+' sat';
+  document.getElementById('goalSatsTarget').textContent='Goal · '+fmt(gSats,0)+' sat ('+fmtD(satToBtc(gSats),2)+' ₿)';
+  document.getElementById('txCount').textContent=state.transactions.length+' buy'+(state.transactions.length!==1?'s':'');
+
+  renderTxTable(); renderMainChart(); renderSparklines();
+}
+
+// ============================================================
+// TX TABLE
+// ============================================================
+function renderTxTable(){
+  const tbody=document.getElementById('txBody'),empty=document.getElementById('emptyState');
+  const sorted=[...state.transactions].sort((a,b)=>b.date.localeCompare(a.date));
+  const showDay=document.getElementById('toggleDay').classList.contains('on');
+  const showPct=document.getElementById('togglePct').classList.contains('on');
+  if(!sorted.length){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=sorted.map(tx=>{
+    const{pnl,pct}=txPnl(tx);
+    const dayName=DAYS[new Date(tx.date+'T00:00:00').getDay()];
+    const satRate=tx.thb>0?tx.sats/tx.thb:0;
+    const entryPrice=tx.sats>0?tx.thb/satToBtc(tx.sats):0;
+    const cls=pnl!=null?(pnl>=0?'pos':'neg'):'';
+    const usdTag=tx.origCurrency==='USD'?'<span class="usd-tag">$'+fmt(tx.origAmount,2)+'</span>':'';
+    const pnlCell=pnl!=null?(pnl>=0?'+':'-')+'฿'+fmt(Math.abs(pnl),2):'฿--';
+    const pctCell=(showPct&&pct!=null)?'<span class="tx-pnl '+cls+'">'+(pct>=0?'+':'')+fmtD(pct,2)+'%</span>':'—';
+    return '<tr><td><div class="tx-date">'+tx.date+'</div>'+(showDay?'<div class="tx-day">'+dayName+'</div>':'')+'</td>'
+      +'<td class="tx-mono">฿'+fmt(tx.thb,0)+usdTag+'</td>'
+      +'<td class="tx-sat">'+fmt(tx.sats,0)+' sat</td>'
+      +'<td class="tx-dim">'+fmtD(satRate,2)+'</td>'
+      +'<td class="tx-dim">฿'+fmt(entryPrice,0)+'</td>'
+      +'<td class="tx-pnl '+cls+'">'+pnlCell+'</td>'
+      +'<td>'+pctCell+'</td>'
+      +'<td><div class="tx-actions"><button class="btn btn-sm" onclick="openEditModal(\''+tx.id+'\')">Edit</button>'
+      +'<button class="btn btn-sm btn-danger" onclick="openDelModal(\''+tx.id+'\')">Del</button></div></td></tr>';
+  }).join('');
+}
+
+// ============================================================
+// CHART
+// ============================================================
+function buildChartData(useFilter){
+  const txs=useFilter?filteredTxs():state.transactions;
+  const sorted=[...txs].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!sorted.length) return null;
+  const map={};
+  sorted.forEach(tx=>{if(!map[tx.date])map[tx.date]={thb:0,sats:0};map[tx.date].thb+=tx.thb;map[tx.date].sats+=tx.sats;});
+  const labels=[],invested=[],portfolio=[],pnlArr=[],satsArr=[],costArr=[],entryPoints=[];
+  let runThb=0,runSats=0;
+  const first=new Date(sorted[0].date+'T00:00:00'),last=new Date();
+  for(let d=new Date(first);d<=last;d.setDate(d.getDate()+1)){
+    const key=d.toISOString().split('T')[0];
+    if(map[key]){runThb+=map[key].thb;runSats+=map[key].sats;}
+    const mv=state.btcPrice?satToBtc(runSats)*state.btcPrice:runThb;
+    labels.push(key);invested.push(runThb);portfolio.push(mv);pnlArr.push(mv-runThb);
+    satsArr.push(runSats);costArr.push(runSats>0?runThb/satToBtc(runSats):0);
+    if(map[key]) entryPoints.push({x:labels.length-1,y:map[key].thb/satToBtc(map[key].sats)});
+  }
+  return{labels,invested,portfolio,pnlArr,satsArr,costArr,entryPoints};
+}
+
+function makeBaseOpts(data){
+  const step=Math.max(1,Math.floor(data.labels.length/10));
+  const ticks=data.labels.map((l,i)=>i%step===0?l.slice(5):'');
+  return{
+    responsive:true,maintainAspectRatio:false,animation:{duration:200},
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(17,17,20,.96)',borderColor:'rgba(255,255,255,.08)',borderWidth:1,titleColor:'#8b8b99',bodyColor:'#f0f0f2',titleFont:{family:'JetBrains Mono',size:11},bodyFont:{family:'JetBrains Mono',size:12},padding:10,cornerRadius:8}},
+    scales:{x:{grid:{color:'rgba(255,255,255,.03)'},border:{display:false},ticks:{color:'#55555f',font:{family:'JetBrains Mono',size:10},maxTicksLimit:8,callback:(_,i)=>ticks[i]||''}},y:{grid:{color:'rgba(255,255,255,.04)'},border:{display:false},ticks:{color:'#55555f',font:{family:'JetBrains Mono',size:10},maxTicksLimit:6}}},
+    _ticks:ticks
+  };
+}
+
+function switchChart(type,btn){
+  currentChart=type;
+  document.querySelectorAll('#chartTabs .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const legends={portfolio:'<span><span class="legend-dot" style="background:var(--orange)"></span>Portfolio Value</span><span><span class="legend-dot" style="background:var(--text3)"></span>Invested</span>',pnl:'<span><span class="legend-dot" style="background:var(--green)"></span>Unrealized P&L</span>',cost:'<span><span class="legend-dot" style="background:var(--blue)"></span>Avg Cost</span><span><span class="legend-dot" style="background:var(--orange)"></span>Current Price</span>',sats:'<span><span class="legend-dot" style="background:var(--orange)"></span>Sat Accumulation</span>',entry:'<span><span class="legend-dot" style="background:var(--orange)"></span>Entry Points</span>'};
+  document.getElementById('chartLegend').innerHTML=legends[type]||'';
+  renderMainChart();
+}
+
+function renderMainChart(){
+  const ctx=document.getElementById('mainChart').getContext('2d');
+  if(mainChart){mainChart.destroy();mainChart=null;}
+  const useFilter=document.getElementById('toggleChartFilter').classList.contains('on');
+  const data=buildChartData(useFilter);
+  if(!data) return;
+  const opts=makeBaseOpts(data);
+  const thbFmt=v=>'฿'+(Math.abs(v)>=1000?fmt(v/1000,0)+'k':fmt(v,0));
+  const satFmt=v=>fmt(v/1000,0)+'k';
+
+  if(currentChart==='portfolio'){
+    opts.scales.y.ticks.callback=thbFmt;
+    opts.plugins.tooltip.callbacks={title:i=>data.labels[i[0].dataIndex]||'',label:i=>' '+i.dataset.label+': ฿'+fmt(i.parsed.y,0)};
+    mainChart=new Chart(ctx,{type:'line',data:{labels:data.labels,datasets:[{label:'Portfolio',data:data.portfolio,borderColor:'rgba(247,147,26,1)',backgroundColor:'rgba(247,147,26,.07)',fill:true,tension:.3,borderWidth:2,pointRadius:0,pointHoverRadius:4},{label:'Invested',data:data.invested,borderColor:'rgba(139,139,153,.5)',borderDash:[4,3],fill:false,tension:.2,borderWidth:1.5,pointRadius:0,pointHoverRadius:3}]},options:opts});
+  }else if(currentChart==='pnl'){
+    const isPos=(data.pnlArr[data.pnlArr.length-1]||0)>=0;
+    opts.scales.y.ticks.callback=thbFmt;
+    opts.plugins.tooltip.callbacks={title:i=>data.labels[i[0].dataIndex]||'',label:i=>' P&L: '+(i.parsed.y>=0?'+':'')+'฿'+fmt(i.parsed.y,0)};
+    mainChart=new Chart(ctx,{type:'line',data:{labels:data.labels,datasets:[{label:'P&L',data:data.pnlArr,borderColor:isPos?'rgba(34,197,94,1)':'rgba(239,68,68,1)',backgroundColor:isPos?'rgba(34,197,94,.07)':'rgba(239,68,68,.07)',fill:true,tension:.3,borderWidth:2,pointRadius:0,pointHoverRadius:4}]},options:opts});
+  }else if(currentChart==='cost'){
+    const curP=data.labels.map(()=>state.btcPrice||0);
+    opts.scales.y.ticks.callback=thbFmt;
+    opts.plugins.tooltip.callbacks={title:i=>data.labels[i[0].dataIndex]||'',label:i=>' '+i.dataset.label+': ฿'+fmt(i.parsed.y,0)+'/BTC'};
+    mainChart=new Chart(ctx,{type:'line',data:{labels:data.labels,datasets:[{label:'Avg Cost',data:data.costArr,borderColor:'rgba(59,130,246,1)',fill:false,tension:.3,borderWidth:2,pointRadius:0,pointHoverRadius:4},{label:'Current',data:curP,borderColor:'rgba(247,147,26,.4)',borderDash:[4,3],fill:false,tension:0,borderWidth:1.5,pointRadius:0}]},options:opts});
+  }else if(currentChart==='sats'){
+    opts.scales.y.ticks.callback=satFmt;
+    opts.plugins.tooltip.callbacks={title:i=>data.labels[i[0].dataIndex]||'',label:i=>' '+fmt(i.parsed.y,0)+' sat'};
+    mainChart=new Chart(ctx,{type:'line',data:{labels:data.labels,datasets:[{label:'Sats',data:data.satsArr,borderColor:'rgba(247,147,26,1)',backgroundColor:'rgba(247,147,26,.06)',fill:true,tension:.3,borderWidth:2,pointRadius:0,pointHoverRadius:4}]},options:opts});
+  }else if(currentChart==='entry'){
+    opts.scales.x.type='linear';
+    opts.scales.x.ticks.callback=v=>{const l=data.labels[Math.round(v)];return l?l.slice(5):'';};
+    opts.scales.y.ticks.callback=thbFmt;
+    opts.plugins.tooltip.callbacks={title:i=>data.labels[Math.round(i[0].parsed.x)]||'',label:i=>' Entry: ฿'+fmt(i.parsed.y,0)+'/BTC'};
+    mainChart=new Chart(ctx,{type:'scatter',data:{datasets:[{label:'Entry',data:data.entryPoints,backgroundColor:'rgba(247,147,26,.8)',borderColor:'rgba(247,147,26,1)',pointRadius:6,pointHoverRadius:9}]},options:opts});
+  }
+}
+
+// ============================================================
+// SPARKLINES
+// ============================================================
+function mkSpk(id,data,color){
+  const el=document.getElementById(id);
+  if(!el||!data||data.length<2) return;
+  if(sparkCharts[id]) sparkCharts[id].destroy();
+  sparkCharts[id]=new Chart(el.getContext('2d'),{type:'line',data:{labels:data.map((_,i)=>i),datasets:[{data,borderColor:color,borderWidth:1.5,pointRadius:0,fill:false,tension:.4}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});
+}
+
+function renderSparklines(){
+  const sorted=[...state.transactions].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!sorted.length) return;
+  let cumThb=0,cumSats=0;
+  const spendArr=[],satsArr=[],mvArr=[],avgArr=[],pctArr=[],pnlVals=[];
+  sorted.forEach(tx=>{
+    cumThb+=tx.thb;cumSats+=tx.sats;
+    const mv=state.btcPrice?satToBtc(cumSats)*state.btcPrice:cumThb;
+    spendArr.push(cumThb);satsArr.push(cumSats);mvArr.push(mv);
+    avgArr.push(cumSats/cumThb);pctArr.push(cumThb>0?((mv-cumThb)/cumThb)*100:0);
+  });
+  sorted.forEach(tx=>{const{pct}=txPnl(tx);pnlVals.push(pct??0);});
+  const lastPct=pctArr[pctArr.length-1]??0;
+  mkSpk('spkSpend',spendArr,'rgba(247,147,26,.8)');
+  mkSpk('spkSats',satsArr,'rgba(247,147,26,.8)');
+  mkSpk('spkPrice',state.priceHistory.map(p=>p.price),'rgba(247,147,26,.6)');
+  mkSpk('spkMarket',mvArr,mvArr[mvArr.length-1]>=spendArr[spendArr.length-1]?'rgba(34,197,94,.8)':'rgba(239,68,68,.8)');
+  mkSpk('spkAvg',avgArr,'rgba(139,139,153,.6)');
+  mkSpk('spkToday',state.priceHistory.map(p=>1e8/p.price),'rgba(34,197,94,.8)');
+  mkSpk('spkDraw',pnlVals,'rgba(239,68,68,.8)');
+  mkSpk('spkPct',pctArr,lastPct>=0?'rgba(34,197,94,.8)':'rgba(239,68,68,.8)');
+  mkSpk('spkWorst',pnlVals,'rgba(239,68,68,.8)');
+  mkSpk('spkBest',pnlVals,'rgba(34,197,94,.8)');
+}
+
+// ============================================================
+// CURRENCY
+// ============================================================
+function setCurrency(cur){
+  modalCurrency=cur;
+  document.getElementById('curTHB').className='cur-btn'+(cur==='THB'?' active':'');
+  document.getElementById('curUSD').className='cur-btn'+(cur==='USD'?' active usd-active':'');
+  document.getElementById('usdRateWrap').style.display=cur==='USD'?'flex':'none';
+  document.getElementById('amountLabel').textContent=cur==='USD'?'Amount (USD $)':'Amount (THB ฿)';
+  document.getElementById('btcPriceLabel').textContent=cur==='USD'?'BTC Price (USD $)':'BTC Price (THB ฿)';
+  document.getElementById('txAmt').placeholder=cur==='USD'?'30':'1000';
+  document.getElementById('prevEntryLabel').textContent=cur==='USD'?'THB Equivalent':'Entry Price';
+  refreshPriceUI();
+  calcPreview();
+}
+
+function getUsdRate(){const v=parseFloat(document.getElementById('usdRate').value);return v>0?v:usdThbRate;}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openAddModal(){
+  modalMode='add';editId=null;
+  document.getElementById('modalTitle').textContent='Add Buy Transaction';
+  document.getElementById('modalSub').textContent='Record a new BTC purchase';
+  document.getElementById('modalSaveBtn').textContent='Save Transaction';
+  document.getElementById('txDate').value=new Date().toISOString().split('T')[0];
+  ['txAmt','txBtcPrice','txSats','txNote','usdRate'].forEach(id=>document.getElementById(id).value='');
+  setCurrency('THB');
+  document.getElementById('txModal').classList.add('open');
+}
+
+function openEditModal(id){
+  modalMode='edit';editId=id;
+  const tx=state.transactions.find(t=>t.id===id);if(!tx)return;
+  document.getElementById('modalTitle').textContent='Edit Transaction';
+  document.getElementById('modalSub').textContent='Editing buy from '+tx.date;
+  document.getElementById('modalSaveBtn').textContent='Save Changes';
+  document.getElementById('txDate').value=tx.date;
+  document.getElementById('txNote').value=tx.note||'';
+  document.getElementById('txSats').value=tx.sats;
+  document.getElementById('usdRate').value='';
+  if(tx.origCurrency==='USD'&&tx.origAmount){
+    setCurrency('USD');
+    document.getElementById('txAmt').value=tx.origAmount;
+    document.getElementById('txBtcPrice').value=tx.origBtcPrice||'';
+    if(tx.origUsdRate) document.getElementById('usdRate').value=tx.origUsdRate;
+  }else{
+    setCurrency('THB');
+    document.getElementById('txAmt').value=tx.thb;
+    document.getElementById('txBtcPrice').value=tx.sats>0?Math.round(tx.thb/satToBtc(tx.sats)):'';
+  }
+  calcPreview();
+  document.getElementById('txModal').classList.add('open');
+}
+
+function closeModal(){document.getElementById('txModal').classList.remove('open');}
+
+function calcPreview(){
+  const rawAmt=parseFloat(document.getElementById('txAmt').value);
+  const rawPrice=parseFloat(document.getElementById('txBtcPrice').value);
+  const satsOvr=parseFloat(document.getElementById('txSats').value);
+  const clr=()=>['prevSats','prevRate','prevBtc','prevEntry'].forEach(id=>document.getElementById(id).textContent='—');
+  let thb,priceThb;
+  if(modalCurrency==='USD'){
+    const rate=getUsdRate();
+    if(!rate){clr();document.getElementById('prevEntry').textContent='Enter rate↑';return;}
+    thb=rawAmt>0?rawAmt*rate:NaN;
+    priceThb=rawPrice>0?rawPrice*rate:(state.btcPrice||NaN);
+    document.getElementById('prevEntry').textContent=!isNaN(thb)?'฿'+fmt(thb,0)+' @ '+fmtD(rate,2):'—';
+  }else{
+    thb=rawAmt;priceThb=rawPrice||state.btcPrice;
+    document.getElementById('prevEntry').textContent=priceThb?'฿'+fmt(priceThb,0):'—';
+  }
+  if(!thb||!priceThb||isNaN(thb)||isNaN(priceThb)||priceThb<=0){clr();return;}
+  const sats=satsOvr>0?Math.round(satsOvr):thbToSat(thb,priceThb);
+  document.getElementById('prevSats').textContent=fmt(sats,0);
+  document.getElementById('prevRate').textContent=fmtD(thb>0?sats/thb:0,2);
+  document.getElementById('prevBtc').textContent=satToBtc(sats).toFixed(8);
+}
+
+function saveTx(){
+  const date=document.getElementById('txDate').value;
+  const rawAmt=parseFloat(document.getElementById('txAmt').value);
+  const rawPrice=parseFloat(document.getElementById('txBtcPrice').value);
+  const satsIn=parseFloat(document.getElementById('txSats').value);
+  const note=document.getElementById('txNote').value.trim();
+  if(!date){toast('Please enter a date','error');return;}
+  if(!rawAmt||rawAmt<=0){toast('Please enter a valid amount','error');return;}
+  let thb,priceThb,meta={};
+  if(modalCurrency==='USD'){
+    const rate=getUsdRate();
+    if(!rate||rate<=0){toast('Enter USD/THB exchange rate','error');return;}
+    const btcUsd=rawPrice||state.btcPriceUsd;
+    if(!btcUsd||btcUsd<=0){toast('Enter BTC price in USD','error');return;}
+    thb=rawAmt*rate;priceThb=btcUsd*rate;
+    meta={origCurrency:'USD',origAmount:rawAmt,origBtcPrice:rawPrice||null,origUsdRate:rate};
+  }else{
+    thb=rawAmt;priceThb=rawPrice||state.btcPrice;
+    if(!priceThb||priceThb<=0){toast('No BTC price — enter manually','error');return;}
+    meta={origCurrency:'THB'};
+  }
+  const sats=satsIn>0?Math.round(satsIn):thbToSat(thb,priceThb);
+  if(!sats||sats<=0){toast('Sats = 0 — check inputs','error');return;}
+  if(modalMode==='add'){
+    state.transactions.push({id:Date.now()+'_'+Math.random().toString(36).slice(2,6),date,thb,sats,note,...meta});
+    toast('Added · '+(modalCurrency==='USD'?'$'+fmt(rawAmt,2)+' → ':'')+'฿'+fmt(thb,0)+' · '+fmt(sats,0)+' sat ✓','success');
+  }else{
+    const i=state.transactions.findIndex(t=>t.id===editId);
+    if(i>=0){state.transactions[i]={...state.transactions[i],date,thb,sats,note,...meta};toast('Updated ✓','success');}
+  }
+  save();closeModal();renderAll();
+}
+
+// ============================================================
+// DELETE / CLEAR
+// ============================================================
+function openDelModal(id){
+  deleteId=id;
+  const tx=state.transactions.find(t=>t.id===id);
+  document.getElementById('delConfirmText').textContent=tx?'Delete buy of ฿'+fmt(tx.thb,0)+' on '+tx.date+' ('+fmt(tx.sats,0)+' sat)?':'Delete this transaction?';
+  document.getElementById('delModal').classList.add('open');
+}
+function closeDelModal(){document.getElementById('delModal').classList.remove('open');deleteId=null;}
+function confirmDelete(){state.transactions=state.transactions.filter(t=>t.id!==deleteId);save();closeDelModal();renderAll();toast('Deleted','success');}
+
+function clearAllData(){
+  document.getElementById('clearCount').textContent=state.transactions.length+' transaction'+(state.transactions.length!==1?'s':'');
+  document.getElementById('clearModal').classList.add('open');
+}
+function closeClearModal(){document.getElementById('clearModal').classList.remove('open');}
+function confirmClearAll(){state.transactions=[];state.priceHistory=[];save();closeClearModal();renderAll();toast('All data cleared','success');}
+
+// ============================================================
+// DAY FILTER
+// ============================================================
+function setDayFilter(day,el){
+  dayFilter=day;
+  document.querySelectorAll('.day-pill').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+
+// ============================================================
+// TWEAKS
+// ============================================================
+function toggleTweaks(){document.getElementById('tweaksPanel').classList.toggle('open');}
+function saveTweaks(){
+  const gf=parseFloat(document.getElementById('goalFiat').value);
+  const gs=parseFloat(document.getElementById('goalSats').value);
+  if(gf>0)state.settings.goalFiat=gf;if(gs>0)state.settings.goalSats=gs;
+  save();renderAll();
+}
+function loadTweaks(){
+  document.getElementById('goalFiat').value=state.settings.goalFiat||200000;
+  document.getElementById('goalSats').value=state.settings.goalSats||2000000;
+}
+
+// ============================================================
+// IMPORT / EXPORT
+// ============================================================
+function exportData(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dca-tracker-'+new Date().toISOString().split('T')[0]+'.json';a.click();URL.revokeObjectURL(a.href);
+  toast('Exported ✓','success');
+}
+function importData(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{try{const imp=JSON.parse(ev.target.result);if(!imp.transactions){toast('Invalid file','error');return;}state={...state,...imp};save();loadTweaks();fetchPrice();toast('Imported '+state.transactions.length+' transactions ✓','success');}catch{toast('Parse error','error');}};
+  r.readAsText(f);e.target.value='';
+}
+
+// ============================================================
+// QUICK PRICE TOGGLE
+// ============================================================
+function togglePriceInput(){
+  const p=document.getElementById('quickPricePanel');
+  p.style.display=p.style.display==='none'?'block':'none';
+  if(p.style.display==='block'){document.getElementById('quickPriceInput').focus();if(!state.settings.manualPrice)autoFetchPrice(false);}
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg,type='info'){
+  const el=document.createElement('div');el.className='toast '+type;
+  const col=type==='success'?'var(--green)':type==='error'?'var(--red)':'var(--text2)';
+  const ico=type==='success'?'✓':type==='error'?'✕':'ℹ';
+  el.innerHTML='<span style="color:'+col+';flex-shrink:0">'+ico+'</span><span>'+msg+'</span>';
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(()=>{el.style.cssText+='opacity:0;transform:translateY(8px);transition:.25s';setTimeout(()=>el.remove(),260);},3200);
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+['txModal','delModal','clearModal'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',e=>{if(e.target===e.currentTarget){if(id==='txModal')closeModal();else if(id==='delModal')closeDelModal();else closeClearModal();}});
+});
+document.addEventListener('click',e=>{
+  const panel=document.getElementById('tweaksPanel');
+  if(panel.classList.contains('open')&&!panel.contains(e.target)&&!e.target.closest('[onclick="toggleTweaks()"]'))panel.classList.remove('open');
+  const qp=document.getElementById('quickPricePanel');
+  if(qp.style.display!=='none'&&!document.getElementById('quickPriceWrap').contains(e.target))qp.style.display='none';
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeModal();closeDelModal();closeClearModal();document.getElementById('tweaksPanel').classList.remove('open');document.getElementById('quickPricePanel').style.display='none';}
+  if(e.key==='n'&&!e.ctrlKey&&!e.metaKey&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName))openAddModal();
+});
+
+// ============================================================
+// SEED DEMO
+// ============================================================
+function seedDemo(){
+  if(state.transactions.length>0) return;
+  const now=new Date();
+  [{da:154,thb:111,p:1750000},{da:147,thb:111,p:1800000},{da:140,thb:111,p:1900000},
+   {da:133,thb:111,p:1950000},{da:126,thb:111,p:2000000},{da:119,thb:111,p:1850000},
+   {da:112,thb:111,p:1780000},{da:105,thb:111,p:1920000},{da:98,thb:111,p:2100000},
+   {da:91,thb:111,p:2050000},{da:84,thb:111,p:1990000},{da:77,thb:111,p:2080000},
+   {da:70,thb:111,p:2150000},{da:63,thb:111,p:2200000},{da:56,thb:111,p:2180000},
+   {da:49,thb:111,p:2100000},{da:42,thb:111,p:1970000},{da:35,thb:111,p:2020000},
+   {da:28,thb:111,p:2050000},{da:21,thb:111,p:2080000},{da:14,thb:111,p:2100000},
+   {da:7,thb:111,p:2048162}].forEach((e,i)=>{
+    const d=new Date(now);d.setDate(d.getDate()-e.da);
+    state.transactions.push({id:'seed_'+i+'_'+Math.random().toString(36).slice(2,6),date:d.toISOString().split('T')[0],thb:e.thb,sats:thbToSat(e.thb,e.p),note:'Weekly DCA',origCurrency:'THB'});
+  });
+  save();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+load();loadTweaks();seedDemo();fetchPrice();
+const _si=state.settings.refreshInterval??5;
+const _sb=document.querySelector('.refresh-opt[data-min="'+_si+'"]');
+if(_sb){document.querySelectorAll('.refresh-opt').forEach(b=>b.classList.remove('active'));_sb.classList.add('active');}
+startAutoRefresh(_si);
+
+</script>
+</body>
+</html>
