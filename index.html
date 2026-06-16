@@ -221,5 +221,21 @@
 
 <div class="toast-container" id="toastContainer"></div>
 <script src="script.js"></script>
+
+  <form onsubmit="handleAddTransaction(event)" style="padding:15px; background:var(--bg2); border-radius:8px; margin-top:15px;">
+  <div class="form-group">
+    <label class="form-label">Invested amount (THB)</label>
+    <input type="number" id="inputThb" class="form-input" required placeholder="e.g. 1000">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Purchase Price (THB/BTC - Optional)</label>
+    <input type="number" id="inputPrice" class="form-input" placeholder="Leave empty for current price">
+  </div>
+  <div class="form-group">
+    <label class="form-label">Date</label>
+    <input type="date" id="inputDate" class="form-input">
+  </div>
+  <button type="submit" class="btn btn-primary" style="width:100%">Save directly to Spreadsheet</button>
+</form>
 </body>
 </html>
