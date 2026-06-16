@@ -2,7 +2,7 @@
 // CONFIGURATION & DATABASE CONNECTIVITY
 // ============================================================
 // Paste your Google Apps Script Web App URL below:
-const GOOGLE_SHEET_API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+const GOOGLE_SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyTh29sUx96Tqb5vFTT8hN9V9iDblmELu5HW6NF1m9BjDPVoZzVN0ZK1wRqMWJVvht7/exec";
 
 let state = {
   transactions: [],
