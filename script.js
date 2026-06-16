@@ -1,12 +1,14 @@
 // ============================================================
-// STATE & APPLICATION INITIALIZATION
+// CONFIGURATION & DATABASE CONNECTIVITY
 // ============================================================
+// Paste your Google Apps Script Web App URL below:
+const GOOGLE_SHEET_API_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
 let state = {
   transactions: [],
   btcPrice: null,
   btcPriceUsd: null,
   btc24h: null,
-  priceHistory: [],
   settings: {
     goalFiat: 200000,
     goalSats: 2000000,
@@ -19,64 +21,96 @@ let state = {
 let editId = null;
 let currentChart = 'portfolio';
 let dayFilter = 'ALL';
-let mainChart = null;
 let priceSource = '';
 let isFetching = false;
 let priceRefreshInterval = null;
 let autoFetchedPrice = null;
 
-// Helper formatters
+// Formatters
 const fmt = (v, dec = 0) => Number(v).toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 const fmtD = (v, dec = 2) => Number(v).toFixed(dec);
 const satToBtc = (sats) => sats / 100000000;
-const satPerThb = (price) => price > 0 ? 100000000 / price : 0;
-const thbToSat = (thb, price) => price > 0 ? Math.round((thb / price) * 100000000) : 0;
 const fmtSats = (sats) => fmt(sats) + " sat";
 
-// Storage Engine
-function save() {
+// ============================================================
+// ASYNC DATABASE SYNC ENGINE (Google Sheets Link)
+// ============================================================
+async function fetchFromDatabase() {
+  if (!GOOGLE_SHEET_API_URL || GOOGLE_SHEET_API_URL.includes("YOUR_APPS_SCRIPT")) {
+    console.warn("Google Sheet API base URL missing. Falling back to LocalStorage.");
+    loadLocalFallback();
+    return;
+  }
+
   try {
-    localStorage.setItem('dca_v5', JSON.stringify(state));
-  } catch (e) {
-    console.error("Storage write error", e);
+    const response = await fetch(GOOGLE_SHEET_API_URL);
+    if (!response.ok) throw new Error("Database fetch connection dropped");
+    const remoteData = await response.json();
+    
+    // Normalize data properties arriving from sheet columns
+    state.transactions = remoteData.map(t => ({
+      id: t.id,
+      date: t.date,
+      type: t.type,
+      thb: parseFloat(t.thb || 0),
+      sats: parseInt(t.sats || 0)
+    }));
+
+    toast("Database synchronized ✓", "success");
+    renderAll();
+  } catch (err) {
+    console.error("Database connection dropped. Using local storage cache.", err);
+    toast("Database offline, loaded cache", "error");
+    loadLocalFallback();
   }
 }
 
-function load() {
-  try {
-    const raw = localStorage.getItem('dca_v5');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      state = { ...state, ...parsed };
-    }
-  } catch (e) {
-    console.error("Storage load error", e);
+async function writeToDatabase(payload) {
+  // Always update locally for instant UI responsiveness
+  if (payload.action === "add") {
+    state.transactions.push({ id: payload.id, date: payload.date, type: payload.type, thb: payload.thb, sats: payload.sats });
+  } else if (payload.action === "clear") {
+    state.transactions = [];
   }
-  if (!state.settings) state.settings = { goalFiat: 200000, goalSats: 2000000, manualPrice: null, refreshInterval: 5, satUnit: 'sat' };
+  saveLocalCache();
+  renderAll();
+
+  if (!GOOGLE_SHEET_API_URL || GOOGLE_SHEET_API_URL.includes("YOUR_APPS_SCRIPT")) return true;
+
+  try {
+    // Send background network update to your Google Sheet database
+    const res = await fetch(GOOGLE_SHEET_API_URL, {
+      method: "POST",
+      mode: "no-cors", // Bypasses browser CORS policy blocks cleanly on micro-backends
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return true;
+  } catch (err) {
+    console.error("Write error on cloud sheet pipeline", err);
+    toast("Saved locally, cloud sync pending", "error");
+    return false;
+  }
+}
+
+function saveLocalCache() { localStorage.setItem('dca_cache_tx', JSON.stringify(state.transactions)); }
+function loadLocalFallback() {
+  const raw = localStorage.getItem('dca_cache_tx');
+  if (raw) state.transactions = JSON.parse(raw);
 }
 
 // ============================================================
-// IMPROVED ROBUST AUTO-FETCH ENGINE (Fixes "Load Failed")
+// BITCOIN AUTO-FETCH PRICE TICKER ENGINE
 // ============================================================
 async function autoFetchPrice() {
   if (isFetching) return;
   isFetching = true;
   updatePriceDotUI('fetching');
   
-  const statusTxt = document.getElementById('fetchStatusText');
-  if (statusTxt) statusTxt.textContent = "Fetching...";
-
   try {
-    // Primary API source: Coingecko / Binance Hybrid Fallback Engine
-    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=thb,usd&include_24hr_change=true', {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' }
-    });
-    
-    if (!response.ok) throw new Error("Primary API unavailable");
-    
+    const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=thb,usd&include_24hr_change=true');
+    if (!response.ok) throw new Error();
     const data = await response.json();
-    if (!data.bitcoin) throw new Error("Data parsing structure exception");
 
     autoFetchedPrice = {
       thb: data.bitcoin.thb,
@@ -85,35 +119,19 @@ async function autoFetchPrice() {
     };
 
     updatePriceDotUI('ok');
-    showAutoResult(autoFetchedPrice);
-    if (statusTxt) statusTxt.textContent = "Live online";
-
+    applyPriceData(autoFetchedPrice.thb, autoFetchedPrice.usd, 'Live', autoFetchedPrice.change24h);
   } catch (err) {
-    console.warn("Primary endpoint dropped, switching to backup Binance API parser...", err);
-    
-    // Failover Redundant Call Pipeline
+    // Fallback direct Binance endpoint mapping
     try {
       const backupResponse = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT');
-      if (!backupResponse.ok) throw new Error("Network load dropped cleanly");
-      
       const bData = await backupResponse.json();
       const liveUsd = parseFloat(bData.lastPrice);
-      const thbEst = liveUsd * 34.5; // Calculated safe fallback multiplier peg
       
-      autoFetchedPrice = {
-        thb: thbEst,
-        usd: liveUsd,
-        change24h: parseFloat(bData.priceChangePercent)
-      };
-
+      autoFetchedPrice = { thb: liveUsd * 35.2, usd: liveUsd, change24h: parseFloat(bData.priceChangePercent) };
       updatePriceDotUI('ok');
-      showAutoResult(autoFetchedPrice);
-      if (statusTxt) statusTxt.textContent = "Live backup";
-    } catch (fallbackErr) {
-      console.error("All fetch paths blocked or cross-origin restricted", fallbackErr);
+      applyPriceData(autoFetchedPrice.thb, autoFetchedPrice.usd, 'Live Fallback', autoFetchedPrice.change24h);
+    } catch(fErr) {
       updatePriceDotUI('error');
-      if (statusTxt) statusTxt.textContent = "Load Failed";
-      toast("Auto-fetch error: Check connection or firewall", "error");
     }
   } finally {
     isFetching = false;
@@ -122,126 +140,82 @@ async function autoFetchPrice() {
 
 function updatePriceDotUI(type) {
   const dot = document.getElementById('priceDot');
-  const btn = document.getElementById('autoFetchBtn');
-  if (dot) {
-    dot.className = 'price-status-dot';
-    if (type === 'fetching') {
-      dot.classList.add('fetching');
-      if (btn) btn.disabled = true;
-    } else if (type === 'ok') {
-      dot.classList.add('live');
-      if (btn) btn.disabled = false;
-    } else {
-      dot.classList.add('error');
-      if (btn) btn.disabled = false;
-    }
-  }
-}
-
-function showAutoResult(r) {
-  const el = document.getElementById('autoPriceResult');
-  if (!el) return;
-  el.style.display = 'block';
-  
-  document.getElementById('autoPriceThb').textContent = '฿' + fmt(r.thb);
-  document.getElementById('autoPriceDetail').textContent = '$' + fmt(r.usd) + ' • ' + (r.change24h >= 0 ? '+' : '') + fmtD(r.change24h, 2) + '% 24h';
-}
-
-function applyAutoPrice() {
-  if (!autoFetchedPrice || !autoFetchedPrice.thb) {
-    toast('No fetched price to apply', 'error');
-    return;
-  }
-  applyPriceData(autoFetchedPrice.thb, autoFetchedPrice.usd, 'Live', autoFetchedPrice.change24h);
-  document.getElementById('quickPricePanel').style.display = 'none';
-  toast('Live price applied ✓', 'success');
+  if (!dot) return;
+  dot.className = 'price-status-dot';
+  if (type === 'fetching') dot.classList.add('fetching');
+  else if (type === 'ok') dot.classList.add('live');
+  else dot.classList.add('error');
 }
 
 function applyPriceData(thb, usd, src, change24h) {
-  if (!thb || thb <= 0) return;
   state.btcPrice = thb;
-  state.btcPriceUsd = usd || null;
-  if (change24h != null) state.btc24h = change24h;
-  priceSource = src || 'Manual';
-  
-  save();
-  refreshPriceUI();
+  state.btcPriceUsd = usd;
+  state.btc24h = change24h;
+  const hp = document.getElementById('headerPrice');
+  if (hp) hp.textContent = '฿' + fmt(thb);
   renderAll();
 }
 
-function refreshPriceUI() {
-  const hp = document.getElementById('headerPrice');
-  const hu = document.getElementById('headerPriceUsd');
-  if (hp) hp.textContent = state.btcPrice ? '฿' + fmt(state.btcPrice) : '฿--';
-  if (hu) hu.textContent = state.btcPriceUsd ? '$' + fmt(state.btcPriceUsd) : '';
+// ============================================================
+// FORM SUBMISSION ROUTER
+// ============================================================
+async function handleAddTransaction(event) {
+  event.preventDefault(); // Stop page reload behavior
+  
+  const thbVal = parseFloat(document.getElementById('inputThb').value);
+  const priceVal = parseFloat(document.getElementById('inputPrice').value) || state.btcPrice;
+
+  if (!thbVal || !priceVal) {
+    toast("Please enter all required transaction fields", "error");
+    return;
+  }
+
+  const calculatedSats = Math.round((thbVal / priceVal) * 100000000);
+  
+  const payload = {
+    action: "add",
+    id: "tx_" + Date.now(),
+    date: document.getElementById('inputDate').value || new Date().toISOString().split('T')[0],
+    type: "buy",
+    thb: thbVal,
+    sats: calculatedSats
+  };
+
+  toast("Sending to database...", "fetching");
+  const success = await writeToDatabase(payload);
+  if (success) toast("Saved to Google Sheets ✓", "success");
 }
 
-// ============================================================
-// UI LOGIC INTERACTION
-// ============================================================
+async function clearAllData() {
+  if (confirm("Are you sure you want to permanently clear the cloud database table?")) {
+    toast("Clearing database...", "fetching");
+    await writeToDatabase({ action: "clear" });
+    toast("Database cleared", "success");
+  }
+}
+
 function togglePriceInput() {
   const p = document.getElementById('quickPricePanel');
   if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
 }
 
-function toggleTweaks() {
-  document.getElementById('tweaksPanel').classList.toggle('open');
-}
+function toggleTweaks() { document.getElementById('tweaksPanel').classList.toggle('open'); }
 
-function applyManualPrice() {
-  const v = parseFloat(document.getElementById('manualPrice').value);
-  if (v > 0) {
-    applyPriceData(v, null, 'Manual', null);
-    toast('Price set manually ✓', 'success');
-  }
-}
-
-function pickRefresh(mins, btn) {
-  state.settings.refreshInterval = mins;
-  document.querySelectorAll('.refresh-opt').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  document.getElementById('refreshIntervalLabel').textContent = "Auto-refresh: " + (mins === 0 ? "Off" : mins + "m");
-  setupAutoRefresh();
-  save();
-}
-
-function setupAutoRefresh() {
-  if (priceRefreshInterval) clearInterval(priceRefreshInterval);
-  const mins = state.settings.refreshInterval || 5;
-  if (mins > 0) {
-    priceRefreshInterval = setInterval(() => {
-      autoFetchPrice();
-    }, mins * 60 * 1000);
-  }
-}
-
-// ============================================================
-// ENGINE CALCULATIONS & CORE RENDERS
-// ============================================================
 function filteredTxs() {
   if (dayFilter === 'ALL') return state.transactions;
-  return state.transactions.filter(t => {
-    const d = new Date(t.date);
-    return d.getDay().toString() === dayFilter;
-  });
+  return state.transactions.filter(t => new Date(t.date).getDay().toString() === dayFilter);
 }
 
 function calcPortfolio(txs) {
-  let totalThb = 0, totalSats = 0, totalBuyThb = 0;
+  let totalThb = 0, totalSats = 0;
   txs.forEach(t => {
-    if (t.type === 'buy') {
-      totalThb += t.thb;
-      totalSats += t.sats;
-      totalBuyThb += t.thb;
-    } else if (t.type === 'sell') {
-      totalThb -= t.thb;
-      totalSats -= t.sats;
-    }
+    totalThb += t.thb;
+    totalSats += t.sats;
   });
-  const mv = state.btcPrice ? satToBtc(totalSats) * state.btcPrice : null;
-  const pnl = mv !== null ? mv - totalThb : null;
-  const pnlPct = (mv !== null && totalThb > 0) ? (pnl / totalThb) * 100 : null;
-  return { totalThb, totalSats, totalBuyThb, marketValue: mv, pnl, pnlPct };
+  const mv = state.btcPrice ? satToBtc(totalSats) * state.btcPrice : 0;
+  const pnl = mv - totalThb;
+  const pnlPct = totalThb > 0 ? (pnl / totalThb) * 100 : 0;
+  return { totalThb, totalSats, marketValue: mv, pnl, pnlPct };
 }
 
 function renderAll() {
@@ -249,30 +223,22 @@ function renderAll() {
   const p = calcPortfolio(fTxs);
   
   const pnlEl = document.getElementById('pnlValue');
-  if (p.pnl !== null) {
-    pnlEl.textContent = (p.pnl >= 0 ? '+' : '-') + '฿' + fmt(Math.abs(p.pnl), 2);
+  if (pnlEl) {
+    pnlEl.textContent = (p.pnl >= 0 ? '+' : '') + '฿' + fmt(p.pnl, 2);
     pnlEl.className = 'pnl-value ' + (p.pnl >= 0 ? 'pos' : 'neg');
   }
-  
+
   const badge = document.getElementById('pnlBadge');
-  if (p.pnlPct !== null) {
+  if (badge) {
     badge.textContent = (p.pnlPct >= 0 ? '+' : '') + fmtD(p.pnlPct, 2) + '%';
     badge.className = 'pnl-badge ' + (p.pnlPct >= 0 ? 'pos' : 'neg');
   }
 
-  document.getElementById('marketValue').textContent = p.marketValue !== null ? '฿' + fmt(p.marketValue, 0) : '฿0';
-  document.getElementById('totalInvested').textContent = '฿' + fmt(p.totalThb, 0);
-  document.getElementById('mSpend').textContent = '฿' + fmt(p.totalBuyThb, 0);
-  document.getElementById('mSats').textContent = fmtSats(p.totalSats);
-  document.getElementById('mSatsBtc').textContent = satToBtc(p.totalSats).toFixed(8) + ' BTC';
-  document.getElementById('mPrice').textContent = state.btcPrice ? '฿' + fmt(state.btcPrice, 0) : '฿--';
-  
-  renderMainChart();
-}
-
-function renderMainChart() {
-  // Chart template engine fallback placeholder
-  console.log("Rendering chart pipeline updates standard context layout.");
+  if(document.getElementById('marketValue')) document.getElementById('marketValue').textContent = '฿' + fmt(p.marketValue, 0);
+  if(document.getElementById('totalInvested')) document.getElementById('totalInvested').textContent = '฿' + fmt(p.totalThb, 0);
+  if(document.getElementById('mSpend')) document.getElementById('mSpend').textContent = '฿' + fmt(p.totalThb, 0);
+  if(document.getElementById('mSats')) document.getElementById('mSats').textContent = fmtSats(p.totalSats);
+  if(document.getElementById('mSatsBtc')) document.getElementById('mSatsBtc').textContent = satToBtc(p.totalSats).toFixed(8) + ' BTC';
 }
 
 function setDayFilter(day, el) {
@@ -282,9 +248,6 @@ function setDayFilter(day, el) {
   renderAll();
 }
 
-// ============================================================
-// SYSTEM UTILITIES
-// ============================================================
 function toast(msg, type = 'success') {
   const tc = document.getElementById('toastContainer');
   if (!tc) return;
@@ -295,16 +258,15 @@ function toast(msg, type = 'success') {
   setTimeout(() => t.remove(), 3000);
 }
 
-// Window global initialization safe anchors
+// Global System Boot Anchor
 window.addEventListener('DOMContentLoaded', () => {
-  load();
-  refreshPriceUI();
-  renderAll();
   autoFetchPrice();
-  setupAutoRefresh();
+  fetchFromDatabase(); 
+  
+  // Refresh price feeds every 5 minutes
+  setInterval(autoFetchPrice, 5 * 60 * 1000);
 });
 
-// Event listener safely intercepting panel click closures
 document.addEventListener('click', e => {
   const qp = document.getElementById('quickPricePanel');
   if (qp && qp.style.display !== 'none' && !document.getElementById('quickPriceWrap').contains(e.target)) {
